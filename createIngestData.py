@@ -2,7 +2,7 @@
 # coding: utf-8
 
 # Import python modules
-import glob, psycopg2
+import glob, psycopg2, pdb
 import pandas as pd
 import numpy as np
 from psycopg2.extensions import AsIs
@@ -95,30 +95,25 @@ def addMeta(dirinpath, diroutpath, filename):
     df.insert(0,'timemark', '')
     df.insert(0,'source_id', '')
    
-    # Extract list of stations from dataframe for query database, and get source_archive name from filename.
+    # Extract list of stations from dataframe for querying the database, and get source_archive name from filename.
     station_tuples = tuple([str(x) for x in df['station_name'].unique().tolist()])
-    source_archive = filename.split('_')[0].strip()
+    source_archive = filename.split('_')[0].lower().strip()
 
     # check if source archive name is ADCIRC
     if source_archive == 'adcirc':
         # Get soure_name and data_source from filename, and use it along with the list of stations to run
         # the getModelSourceID function to get the sourc_id(s)
-        source_name = source_archive+'_'+filename.split('_')[2].lower().strip()
-        data_source = filename.split('_')[3].lower().strip()
+        source_name = source_archive
+        data_source = filename.split('_')[3].upper().strip()+'_'+filename.split('_')[2].upper().strip()
         dfstations = getModelSourceID(source_name,data_source,station_tuples)
        
-        # Check source name, and use it to get the appropiate timemark for the forecast and nowecast data 
-        if source_name == 'adcirc_forecast':
-            df['timemark']  = filename.split('_')[5].split('.')[0].lower().strip()
-        elif source_name == 'adcirc_nowcast':
-            df['timemark']  = filename.split('_')[4].lower().strip()
-        else:
-            sys.exit('Incorrect source name.')
+        # Get the timemark for the forecast and nowecast data 
+        df['timemark']  = filename.split('_')[-1].split('.')[0].lower().strip()
             
     else:
         # Use source_archive and list of stations to get source_id(s) for the observation gauge data
         dfstations = getObsSourceID(source_archive,station_tuples)
-        df['timemark'] = filename.split('_')[2].strip()
+        df['timemark'] = filename.split('_')[-1].split('.')[0].lower().strip()
 
     # Add source id(s) to dataframe 
     for index, row in dfstations.iterrows():

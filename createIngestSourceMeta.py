@@ -40,13 +40,14 @@ def getStationID(station_tuples):
 
 # This function takes a input a directory path and filename, and used them to read the input file
 # and add station_id(s) that are extracted from the apsviz_gauges database.
-def addMeta(dirpath, filename):
+def addMeta(dirinpath, filename):
     # Read inputfile to a Pandas dataframe, convert column names to lower case, rename the station 
     # column to station_name, and drop columns that are not required
-    df = pd.read_csv(dirpath+filename)
+    df = pd.read_csv(dirinpath+filename)
     df.columns= df.columns.str.lower()
     df = df.rename(columns={'station': 'station_name'})
-    df.drop(columns=['lat','lon','name','tz','owner','state','county'], inplace=True)
+    # DID NOT INCLUDE COUNTY BECAUSE IT DOES NOT EXIST IN THE CONTRAIL FILES, BUT THIS MAY CHANGE
+    df.drop(columns=['lat','lon','tz','owner','state','county'], inplace=True)
 
 
     # Extract list of stations from dataframe for query database using the getStationID function,
@@ -61,19 +62,29 @@ def addMeta(dirpath, filename):
 
     # Check if source is ADCIRC
     if source == 'adcirc':
+        # DROP COUNTY MAY CHANGE IN THE FUTURE, WHERE IS WOULD BE DONE ABOVE
+        #df.drop(columns=['county'], inplace=True)
         # Get source_name and data_source from filename, and add them to the dataframe along
         # with the source_archive value
-        df['source_name'] = source+'_'+filename.split('_')[3].lower()
-        df['data_source'] = filename.split('_')[4].lower()
+        df['source_name'] = source
+        df = df.rename(columns={'name': 'data_source'})
+        #df['data_source'] = filename.split('_')[4].lower()
         df['source_archive'] = 'renci'
     elif source == 'contrails':
+        # Drop name column
+        df.drop(columns=['name'], inplace=True)
         # Add data_source, source_name, and source_archive to dataframe
-        df['data_source'] = 'gauge'
+        gtype = filename.split('_')[3].lower()
+        df['data_source'] = gtype+'_gauge'
         df['source_name'] = 'ncem'
         df['source_archive'] = source
     elif source == 'noaa':
+        # DROP COUNTY MAY CHANGE IN THE FUTURE, WHERE IS WOULD BE DONE ABOVE
+        #df.drop(columns=['county'], inplace=True)
+        # Drop name column
+        df.drop(columns=['name'], inplace=True)
         # Add data_source, source_name, and source_archive to dataframe
-        df['data_source'] = 'gauge'
+        df['data_source'] = 'tidal_gauge'
         df['source_name'] = source
         df['source_archive'] = source
     else:
@@ -88,29 +99,34 @@ def addMeta(dirpath, filename):
     return(df)
 
 # Define directory path
-dirpath = '/Users/jmpmcman/Work/Surge/data/DataHarvesting/SIMULATED_DAILY_INGEST/'
+dirinpath = '/Users/jmpmcman/Work/Surge/data/DataHarvesting/SIMULATED_DAILY_HARVESTING/'
+diroutpath = '/Users/jmpmcman/Work/Surge/data/DataHarvesting/SIMULATED_DAILY_INGEST/'
 
 # Define filename for the adcirc forecast data, and use it to run the addMeta function above, and
 # write dataframe that is returned to a csv file
-filename = 'adcirc_stationdata_meta_forecast_HSOFS_2022-01-07T00:00:00_2022-01-09T00:00:00.csv'
-df = addMeta(dirpath,filename)
-df.to_csv(dirpath+'source_'+filename, index=False)
+filename = 'adcirc_stationdata_meta_forecast_HSOFS_2022-01-07T00:00:00.csv'
+df = addMeta(dirinpath,filename)
+df.to_csv(diroutpath+'source_'+filename, index=False)
 
 # Define filename for the adcirc nowcast data, and use it to run the addMeta function above, and
 # write dataframe that is returned to a csv file
-filename = 'adcirc_stationdata_meta_nowcast_HSOFS_2022-01-07T00:00:00_2022-01-09T00:00:00.csv'
-df = addMeta(dirpath,filename)
-df.to_csv(dirpath+'source_'+filename, index=False)
+filename = 'adcirc_stationdata_meta_nowcast_HSOFS_2022-01-09T00:00:00.csv'
+df = addMeta(dirinpath,filename)
+df.to_csv(diroutpath+'source_'+filename, index=False)
 
 # Define filename for the contrails data, and use it to run the addMeta function above, and
 # write dataframe that is returned to a csv file
-filename = 'contrails_stationdata_meta_2022-01-07T00:00:00_2022-01-09T00:00:00.csv'
-df = addMeta(dirpath,filename)
-df.to_csv(dirpath+'source_'+filename, index=False)
+filename = 'contrails_stationdata_meta_COASTAL_2022-01-09T00:00:00.csv'
+df = addMeta(dirinpath,filename)
+df.to_csv(diroutpath+'source_'+filename, index=False)
+
+filename = 'contrails_stationdata_meta_RIVERS_2022-01-09T00:00:00.csv'
+df = addMeta(dirinpath,filename)
+df.to_csv(diroutpath+'source_'+filename, index=False)
 
 # Define filename for the noaa data, and use it to run the addMeta function above, and
 # write dataframe that is returned to a csv file
-filename = 'noaa_stationdata_meta_2022-01-07T00:00:00_2022-01-09T00:00:00.csv'
-df = addMeta(dirpath,filename)
-df.to_csv(dirpath+'source_'+filename, index=False)
+filename = 'noaa_stationdata_meta_2022-01-09T00:00:00.csv'
+df = addMeta(dirinpath,filename)
+df.to_csv(diroutpath+'source_'+filename, index=False)
 
