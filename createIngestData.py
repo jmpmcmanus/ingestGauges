@@ -120,7 +120,7 @@ def addMeta(dirinpath, diroutpath, filename):
         df.loc[df['station_name'] == row['station_name'], 'source_id'] = row['source_id']
 
     # Drom station_name column from dataframe
-    #df.drop(columns=['station_name'], inplace=True)
+    df.drop(columns=['station_name'], inplace=True)
 
     # Write dataframe to csv file
     df.to_csv(diroutpath+'data_'+filename, index=False)

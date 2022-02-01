@@ -2,8 +2,8 @@
 # coding: utf-8
 
 # Import python modules
-import pandas as pd
 import psycopg2, sys
+import pandas as pd
 from psycopg2.extensions import AsIs
 
 # This function takes a list of station names as input, and uses them to query the apsviz_gauges database, and return a list
@@ -54,9 +54,13 @@ def addMeta(dirinpath, filename):
     # Extract list of stations from dataframe for query database using the getStationID function,
     # drop station_name column, and then add station_id(s) extracted from database to dataframe 
     station_tuples = tuple(sorted([str(x) for x in df['station_name'].unique().tolist()]))
-    dfstation = getStationID(station_tuples)
+    dfstations = getStationID(station_tuples)
+    df['station_name'] = df['station_name'].astype(str)
+    for index, row in dfstations.iterrows():
+        df.loc[df['station_name'] == row['station_name'], 'station_id'] = row['station_id']
+
+    df['station_id'] = df['station_id'].astype(int) 
     df.drop(columns=['station_name'], inplace=True)
-    df['station_id'] = dfstation['station_id'].astype(int)
 
     # Get source name from filename
     source = filename.split('_')[0]

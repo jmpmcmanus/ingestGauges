@@ -175,8 +175,8 @@ def createViewIngest(dirPath):
 
 dirPath = '/projects/ees/TDS/DataIngesting/SIMULATED_DAILY_INGEST/'
 #createStationIngest(dirPath)
-createSourceIngest(dirPath)
+#createSourceIngest(dirPath)
 #createDataIngest(dirPath, 'data_contrails_stationdata')
 #createDataIngest(dirPath, 'data_adcirc_stationdata')
 #createDataIngest(dirPath, 'data_noaa_stationdata')
-#createViewIngest(dirPath)
+createViewIngest(dirPath)
