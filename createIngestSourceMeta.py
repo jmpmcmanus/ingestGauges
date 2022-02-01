@@ -2,9 +2,10 @@
 # coding: utf-8
 
 # Import python modules
-import psycopg2, sys
+import argparse, psycopg2, sys, os
 import pandas as pd
 from psycopg2.extensions import AsIs
+from loguru import logger
 
 # This function takes a list of station names as input, and uses them to query the apsviz_gauges database, and return a list
 # of station id(s).
@@ -39,12 +40,12 @@ def getStationID(station_tuples):
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
-# This function takes a input a directory path and filename, and used them to read the input file
+# This function takes a input a directory path and inputFile, and used them to read the input file
 # and add station_id(s) that are extracted from the apsviz_gauges database.
-def addMeta(dirinpath, filename):
+def addMeta(inputDir, outputDir, inputFile):
     # Read inputfile to a Pandas dataframe, convert column names to lower case, rename the station 
     # column to station_name, and drop columns that are not required
-    df = pd.read_csv(dirinpath+filename)
+    df = pd.read_csv(inputDir+inputFile)
     df.columns= df.columns.str.lower()
     df = df.rename(columns={'station': 'station_name'})
     # DID NOT INCLUDE COUNTY BECAUSE IT DOES NOT EXIST IN THE CONTRAIL FILES, BUT THIS MAY CHANGE
@@ -62,24 +63,24 @@ def addMeta(dirinpath, filename):
     df['station_id'] = df['station_id'].astype(int) 
     df.drop(columns=['station_name'], inplace=True)
 
-    # Get source name from filename
-    source = filename.split('_')[0]
+    # Get source name from inputFilee
+    source = inputFile.split('_')[0]
 
     # Check if source is ADCIRC
     if source == 'adcirc':
         # DROP COUNTY MAY CHANGE IN THE FUTURE, WHERE IS WOULD BE DONE ABOVE
         #df.drop(columns=['county'], inplace=True)
-        # Get source_name and data_source from filename, and add them to the dataframe along
+        # Get source_name and data_source from inputFile, and add them to the dataframe along
         # with the source_archive value
         df['source_name'] = source
         df = df.rename(columns={'name': 'data_source'})
-        #df['data_source'] = filename.split('_')[4].lower()
+        #df['data_source'] = inputFile.split('_')[4].lower()
         df['source_archive'] = 'renci'
     elif source == 'contrails':
         # Drop name column
         df.drop(columns=['name'], inplace=True)
         # Add data_source, source_name, and source_archive to dataframe
-        gtype = filename.split('_')[3].lower()
+        gtype = inputFile.split('_')[3].lower()
         df['data_source'] = gtype+'_gauge'
         df['source_name'] = 'ncem'
         df['source_archive'] = source
@@ -100,38 +101,36 @@ def addMeta(dirinpath, filename):
     newColsOrder = ['station_id','data_source','units','source_name','source_archive']
     df=df.reindex(columns=newColsOrder)
 
-    # Return dataframe 
-    return(df)
+    # Write dataframe to csv file 
+    df.to_csv(outputDir+'source_'+inputFile, index=False)
 
-# Define directory path
-dirinpath = '/projects/ees/TDS/DataHarvesting/SIMULATED_DAILY_HARVESTING/'
-diroutpath = '/projects/ees/TDS/DataIngesting/SIMULATED_DAILY_INGEST/'
+# Main program function takes args as input, which contains the inputDir, outputDir, and inputFile values.
+@logger.catch
+def main(args):
+    # Add logger
+    logger.remove()
+    log_path = os.getenv('LOG_PATH', os.path.join(os.path.dirname(__file__), 'logs'))
+    logger.add(log_path+'/createIngestSourceMeta.log', level='DEBUG')
 
-# Define filename for the adcirc forecast data, and use it to run the addMeta function above, and
-# write dataframe that is returned to a csv file
-filename = 'adcirc_stationdata_meta_forecast_HSOFS_2022-01-07T00:00:00.csv'
-df = addMeta(dirinpath,filename)
-df.to_csv(diroutpath+'source_'+filename, index=False)
+    # Extract args variables
+    inputDir = args.inputDir
+    outputDir = args.outputDir
+    inputFile = args.inputFile
 
-# Define filename for the adcirc nowcast data, and use it to run the addMeta function above, and
-# write dataframe that is returned to a csv file
-filename = 'adcirc_stationdata_meta_nowcast_HSOFS_2022-01-09T00:00:00.csv'
-df = addMeta(dirinpath,filename)
-df.to_csv(diroutpath+'source_'+filename, index=False)
+    logger.info('Start processing source data for file '+inputFile+'.')
+    addMeta(inputDir, outputDir, inputFile)
+    logger.info('Finished processing source data for file '+inputFile+'.')
 
-# Define filename for the contrails data, and use it to run the addMeta function above, and
-# write dataframe that is returned to a csv file
-filename = 'contrails_stationdata_meta_COASTAL_2022-01-09T00:00:00.csv'
-df = addMeta(dirinpath,filename)
-df.to_csv(diroutpath+'source_'+filename, index=False)
+# Run main function takes inputDir, outputDir, and inputFile as input.
+if __name__ == "__main__":
+    """ This is executed when run from the command line """
+    parser = argparse.ArgumentParser()
 
-filename = 'contrails_stationdata_meta_RIVERS_2022-01-09T00:00:00.csv'
-df = addMeta(dirinpath,filename)
-df.to_csv(diroutpath+'source_'+filename, index=False)
+    # Optional argument which requires a parameter (eg. -d test)
+    parser.add_argument("--inputDir", action="store", dest="inputDir")
+    parser.add_argument("--outputDir", action="store", dest="outputDir")
+    parser.add_argument("--inputFile", action="store", dest="inputFile")
 
-# Define filename for the noaa data, and use it to run the addMeta function above, and
-# write dataframe that is returned to a csv file
-filename = 'noaa_stationdata_meta_2022-01-09T00:00:00.csv'
-df = addMeta(dirinpath,filename)
-df.to_csv(diroutpath+'source_'+filename, index=False)
+    args = parser.parse_args()
+    main(args)
 

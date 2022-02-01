@@ -2,10 +2,11 @@
 # coding: utf-8
 
 # Import python modules
-import glob, psycopg2, pdb
+import argparse, os, glob, psycopg2
 import pandas as pd
 import numpy as np
 from psycopg2.extensions import AsIs
+from loguru import logger
 
 # This function takes as input the source_archive (noaa, contrails), and a list of station_id(s), and returnst source_id(s) for 
 # observation data from the gauge_source table in the apsviz_gauges database. This funciton specifically gets source_id(s) for
@@ -86,10 +87,10 @@ def getModelSourceID(data_source,station_tuples):
 # a list of existing source ids that it includes in the gauge data to enable joining the gauge data table with 
 # gauge source table. The function adds a timemark, that it gets from the input file name. The timemark values can
 # be used to uniquely query an ADCIRC  model run.
-def addMeta(dirinpath, diroutpath, filename):
+def addMeta(inputDir, outputDir, inputFile):
     # Read input file, convert column name to lower case, rename station column to station_name, convert its data 
     # type to string, and add timemark and source_id columns
-    df = pd.read_csv(dirinpath+filename)
+    df = pd.read_csv(inputDir+inputFile)
     df.columns= df.columns.str.lower()
     df = df.rename(columns={'station': 'station_name'})
     df = df.astype({"station_name": str})
@@ -98,22 +99,22 @@ def addMeta(dirinpath, diroutpath, filename):
    
     # Extract list of stations from dataframe for querying the database, and get source_archive name from filename.
     station_tuples = tuple(sorted([str(x) for x in df['station_name'].unique().tolist()]))
-    source_archive = filename.split('_')[0].lower().strip()
+    source_archive = inputFile.split('_')[0].lower().strip()
 
     # check if source archive name is ADCIRC
     if source_archive == 'adcirc':
         # Get soure_name and data_source from filename, and use it along with the list of stations to run
         # the getModelSourceID function to get the sourc_id(s)
-        data_source = filename.split('_')[3].upper().strip()+'_'+filename.split('_')[2].upper().strip()
+        data_source = inputFile.split('_')[3].upper().strip()+'_'+inputFile.split('_')[2].upper().strip()
         dfstations = getModelSourceID(data_source,station_tuples)
        
         # Get the timemark for the forecast and nowecast data 
-        df['timemark']  = filename.split('_')[-1].split('.')[0].lower().strip()
+        df['timemark']  = inputFile.split('_')[-1].split('.')[0].lower().strip()
             
     else:
         # Use source_archive and list of stations to get source_id(s) for the observation gauge data
         dfstations = getObsSourceID(source_archive,station_tuples)
-        df['timemark'] = filename.split('_')[-1].split('.')[0].lower().strip()
+        df['timemark'] = inputFile.split('_')[-1].split('.')[0].lower().strip()
 
     # Add source id(s) to dataframe 
     for index, row in dfstations.iterrows():
@@ -123,26 +124,49 @@ def addMeta(dirinpath, diroutpath, filename):
     df.drop(columns=['station_name'], inplace=True)
 
     # Write dataframe to csv file
-    df.to_csv(diroutpath+'data_'+filename, index=False)
+    df.to_csv(outputDir+'data_'+inputFile, index=False)
 
 # This function takes as input a directory input path, a directory output path and a dataset variable. It 
 # generates and list of input filenames, and uses them to run the addMeta function above.
-def processData(dirinpath, diroutpath, dataset):
-    filenames = glob.glob(dirinpath+dataset+"*.csv")
+def processData(inputDir, outputDir, inputDataset):
+    dirInputFiles = glob.glob(inputDir+inputDataset+"*.csv")
     
-    for dirinfile in filenames:
-        filename = dirinfile.split('/')[-1]
-        if filename.split('_')[2] != 'meta' and filename.split('_')[2] != 'FakeVeerRight':
-            #print(filename)
-            addMeta(dirinpath, diroutpath, filename)
+    for dirInputFile in dirInputFiles:
+        inputFile = dirInputFile.split('/')[-1]
+        if inputFile.split('_')[2] != 'meta' and inputFile.split('_')[2] != 'FakeVeerRight':
+            #print(inputFile)
+            addMeta(inputDir, outputDir, inputFile)
         else:
             continue
 
-# Define directory input and output paths, and use them, along with dataset, to run the 
-# processData function
-dirinpath = '/projects/ees/TDS/DataHarvesting/SIMULATED_DAILY_HARVESTING/'
-diroutpath = '/projects/ees/TDS/DataIngesting/SIMULATED_DAILY_INGEST/'
-processData(dirinpath, diroutpath, 'contrails_stationdata_')
-processData(dirinpath, diroutpath, 'adcirc_stationdata_')
-processData(dirinpath, diroutpath, 'noaa_stationdata_')
+# Main program function takes args as input, which contains the inputDir, outputDir, and inputFile values.
+@logger.catch
+def main(args):
+    # Add logger
+    logger.remove()
+    log_path = os.getenv('LOG_PATH', os.path.join(os.path.dirname(__file__), 'logs'))
+    logger.add(log_path+'/createIngestData.log', level='DEBUG')
+
+    # Extract args variables
+    inputDir = args.inputDir
+    outputDir = args.outputDir
+    inputDataset = args.inputDataset
+
+    logger.info('Start processing data for dataset '+inputDataset+'.')
+    processData(inputDir, outputDir, inputDataset)
+    logger.info('Finished processing data for dataset '+inputDataset+'.')
+
+# Run main function takes inputDir, outputDir, and inputFile as input.
+if __name__ == "__main__":
+    """ This is executed when run from the command line """
+    parser = argparse.ArgumentParser()
+
+    # Optional argument which requires a parameter (eg. -d test)
+    parser.add_argument("--inputDir", action="store", dest="inputDir")
+    parser.add_argument("--outputDir", action="store", dest="outputDir")
+    parser.add_argument("--inputDataset", action="store", dest="inputDataset")
+
+    args = parser.parse_args()
+    main(args)
+
 
