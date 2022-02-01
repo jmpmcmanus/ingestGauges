@@ -15,7 +15,7 @@ def createStationIngest(dirPath):
     f = open(dirPath+"docker_cp_apsviz_gauge_stations.sh","a")
 
     for geomfile in filenames:
-       f.write("docker cp "+geomfile.strip()+" apsviz-timeseriesdb-refine_db_1:/home/\n")
+       f.write("docker cp "+geomfile.strip()+" apsviz-timeseriesdb-db-1:/home/\n")
  
     f.close()
 
@@ -62,7 +62,7 @@ def createSourceIngest(dirPath):
     f = open(dirPath+"docker_cp_apsviz_gauge_source.sh","a")
 
     for sourcefile in filenames:
-       f.write("docker cp "+sourcefile.strip()+" apsviz-timeseriesdb-refine_db_1:/home/\n")
+       f.write("docker cp "+sourcefile.strip()+" apsviz-timeseriesdb-db-1:/home/\n")
  
     f.close()
 
@@ -112,7 +112,7 @@ def createDataIngest(dirPath, dataset):
     
     for datafile in filenames:
         #filename = datafile.split('/')[-1]
-        f.write("docker cp "+datafile.strip()+" apsviz-timeseriesdb-refine_db_1:/home/\n")
+        f.write("docker cp "+datafile.strip()+" apsviz-timeseriesdb-db-1:/home/\n")
 
     f.close()
 
@@ -173,10 +173,10 @@ def createViewIngest(dirPath):
 
     os.chmod(dirPath+psql_cp_file, 0o755)
 
-dirPath = '/Users/jmpmcman/Work/Surge/data/DataHarvesting/SIMULATED_DAILY_INGEST/'
+dirPath = '/projects/ees/TDS/DataIngesting/SIMULATED_DAILY_INGEST/'
 #createStationIngest(dirPath)
-#createSourceIngest(dirPath)
+createSourceIngest(dirPath)
 #createDataIngest(dirPath, 'data_contrails_stationdata')
 #createDataIngest(dirPath, 'data_adcirc_stationdata')
 #createDataIngest(dirPath, 'data_noaa_stationdata')
-createViewIngest(dirPath)
+#createViewIngest(dirPath)

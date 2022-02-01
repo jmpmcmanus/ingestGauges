@@ -21,7 +21,8 @@ def getStationID(station_tuples):
 
         # Run query 
         cur.execute("""SELECT station_id, station_name FROM drf_gauge_station
-                       WHERE station_name IN %(stationtuples)s""", 
+                       WHERE station_name IN %(stationtuples)s
+                       ORDER BY station_name""", 
                     {'stationtuples': AsIs(station_tuples)})
        
         # convert query output to Pandas dataframe 
@@ -52,7 +53,7 @@ def addMeta(dirinpath, filename):
 
     # Extract list of stations from dataframe for query database using the getStationID function,
     # drop station_name column, and then add station_id(s) extracted from database to dataframe 
-    station_tuples = tuple([str(x) for x in df['station_name'].unique().tolist()])
+    station_tuples = tuple(sorted([str(x) for x in df['station_name'].unique().tolist()]))
     dfstation = getStationID(station_tuples)
     df.drop(columns=['station_name'], inplace=True)
     df['station_id'] = dfstation['station_id'].astype(int)
@@ -99,8 +100,8 @@ def addMeta(dirinpath, filename):
     return(df)
 
 # Define directory path
-dirinpath = '/Users/jmpmcman/Work/Surge/data/DataHarvesting/SIMULATED_DAILY_HARVESTING/'
-diroutpath = '/Users/jmpmcman/Work/Surge/data/DataHarvesting/SIMULATED_DAILY_INGEST/'
+dirinpath = '/projects/ees/TDS/DataHarvesting/SIMULATED_DAILY_HARVESTING/'
+diroutpath = '/projects/ees/TDS/DataIngesting/SIMULATED_DAILY_INGEST/'
 
 # Define filename for the adcirc forecast data, and use it to run the addMeta function above, and
 # write dataframe that is returned to a csv file

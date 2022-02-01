@@ -25,7 +25,8 @@ def getObsSourceID(source_archive,station_tuples):
         cur.execute("""SELECT s.source_id AS source_id, g.station_id AS station_id, g.station_name AS station_name,
                        s.data_source AS data_source, s.source_name AS source_name
                        FROM drf_gauge_station g INNER JOIN drf_gauge_source s ON s.station_id=g.station_id
-                       WHERE source_archive = %(sourcearchive)s AND station_name IN %(stationtuples)s""", 
+                       WHERE source_archive = %(sourcearchive)s AND station_name IN %(stationtuples)s
+                       ORDER BY station_name""", 
                     {'sourcearchive': source_archive,'stationtuples': AsIs(station_tuples)})
 
         # convert query output to Pandas dataframe
@@ -46,7 +47,7 @@ def getObsSourceID(source_archive,station_tuples):
 # This function takes as input the data_source (hsofs...), and a list of station_id(s), and returns source_id(s) for    
 # model data from the gauge_source table in the apsviz_gauges database. This funciton specifically gets source_id(s) for
 # model data, such as from ADCIRC. The data_source, such is hsofs, is the grid that is used in the ADCIRC run.
-def getModelSourceID(source_name,data_source,station_tuples):
+def getModelSourceID(data_source,station_tuples):
     try:
         # Create connection to database and get cursor
         conn = psycopg2.connect("dbname='apsviz_gauges' user='apsviz_gauges' host='localhost' port='5432' password='apsviz_gauges'")
@@ -61,9 +62,9 @@ def getModelSourceID(source_name,data_source,station_tuples):
         cur.execute("""SELECT s.source_id AS source_id, g.station_id AS station_id, g.station_name AS station_name,
                        s.data_source AS data_source, s.source_name AS source_name
                        FROM drf_gauge_station g INNER JOIN drf_gauge_source s ON s.station_id=g.station_id
-                       WHERE data_source = %(datasource)s AND source_name = %(sourcename)s 
-                       AND station_name IN %(stationtuples)s""", 
-                    {'datasource': data_source,'sourcename': source_name, 'stationtuples': AsIs(station_tuples)})
+                       WHERE data_source = %(datasource)s AND station_name IN %(stationtuples)s
+                       ORDER BY station_name""",
+                    {'datasource': data_source, 'stationtuples': AsIs(station_tuples)})
 
         # convert query output to Pandas dataframe
         dfstations = pd.DataFrame(cur.fetchall(), columns=['source_id','station_id','station_name','data_source',
@@ -96,16 +97,15 @@ def addMeta(dirinpath, diroutpath, filename):
     df.insert(0,'source_id', '')
    
     # Extract list of stations from dataframe for querying the database, and get source_archive name from filename.
-    station_tuples = tuple([str(x) for x in df['station_name'].unique().tolist()])
+    station_tuples = tuple(sorted([str(x) for x in df['station_name'].unique().tolist()]))
     source_archive = filename.split('_')[0].lower().strip()
 
     # check if source archive name is ADCIRC
     if source_archive == 'adcirc':
         # Get soure_name and data_source from filename, and use it along with the list of stations to run
         # the getModelSourceID function to get the sourc_id(s)
-        source_name = source_archive
         data_source = filename.split('_')[3].upper().strip()+'_'+filename.split('_')[2].upper().strip()
-        dfstations = getModelSourceID(source_name,data_source,station_tuples)
+        dfstations = getModelSourceID(data_source,station_tuples)
        
         # Get the timemark for the forecast and nowecast data 
         df['timemark']  = filename.split('_')[-1].split('.')[0].lower().strip()
@@ -120,7 +120,7 @@ def addMeta(dirinpath, diroutpath, filename):
         df.loc[df['station_name'] == row['station_name'], 'source_id'] = row['source_id']
 
     # Drom station_name column from dataframe
-    df.drop(columns=['station_name'], inplace=True)
+    #df.drop(columns=['station_name'], inplace=True)
 
     # Write dataframe to csv file
     df.to_csv(diroutpath+'data_'+filename, index=False)
@@ -140,8 +140,8 @@ def processData(dirinpath, diroutpath, dataset):
 
 # Define directory input and output paths, and use them, along with dataset, to run the 
 # processData function
-dirinpath = '/Users/jmpmcman/Work/Surge/data/DataHarvesting/SIMULATED_DAILY_HARVESTING/'
-diroutpath = '/Users/jmpmcman/Work/Surge/data/DataHarvesting/SIMULATED_DAILY_INGEST/'
+dirinpath = '/projects/ees/TDS/DataHarvesting/SIMULATED_DAILY_HARVESTING/'
+diroutpath = '/projects/ees/TDS/DataIngesting/SIMULATED_DAILY_INGEST/'
 processData(dirinpath, diroutpath, 'contrails_stationdata_')
 processData(dirinpath, diroutpath, 'adcirc_stationdata_')
 processData(dirinpath, diroutpath, 'noaa_stationdata_')

@@ -134,7 +134,7 @@ def addNOAAMeta(dirpath, filename):
 
 def addNCEMMeta(dirpath, contrailfile, adcircfile):
     # NEED TO GET THIS INFORMATION FROM CONTRAILS INSTEAD OF RELYING ON AN EXCEL FILE
-    df = pd.read_excel('/Users/jmpmcman/Work/Surge/apsViz/gauges/FIMAN_NCEM_Coastal.xlsx')
+    df = pd.read_excel('/projects/ees/TDS/ingest/FIMAN_NCEM/FIMAN_NCEM_Coastal.xlsx')
     fdf = df.loc[df['IS_COASTAL'] == 1]
     fdf = fdf.loc[fdf['IN_SERVICE'] == 1]
     fdf.drop(fdf[fdf['OWNER'] == 'NOAA'].index, inplace = True)
@@ -225,7 +225,7 @@ if __name__ == "__main__":
     main(args)
 
 # Define directory path
-#dirpath = '/Users/jmpmcman/Work/Surge/data/DataHarvesting/SIMULATED_DAILY_HARVESTING/'
+#dirpath = '/projects/ees/TDS/DataHarvesting/SIMULATED_DAILY_HARVESTING/'
 
 # Define noaa input file, run the addNOAAMeta function and write dataframed that is returned to a csv file
 #noaafile = 'noaa_stationdata_meta_2022-01-07T00:00:00_2022-01-09T00:00:00.csv'
