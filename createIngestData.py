@@ -139,7 +139,7 @@ def processData(inputDir, outputDir, inputDataset):
         else:
             continue
 
-# Main program function takes args as input, which contains the inputDir, outputDir, and inputFile values.
+# Main program function takes args as input, which contains the inputDir, outputDir, and inputDataset values.
 @logger.catch
 def main(args):
     # Add logger
@@ -156,7 +156,7 @@ def main(args):
     processData(inputDir, outputDir, inputDataset)
     logger.info('Finished processing data for dataset '+inputDataset+'.')
 
-# Run main function takes inputDir, outputDir, and inputFile as input.
+# Run main function takes inputDir, outputDir, and inputDataset as input.
 if __name__ == "__main__":
     """ This is executed when run from the command line """
     parser = argparse.ArgumentParser()
