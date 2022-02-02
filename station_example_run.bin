@@ -1,3 +1,0 @@
-python createIngestStationMeta.py --inputDir /projects/ees/TDS/DataHarvesting/SIMULATED_DAILY_HARVESTING/ --outputDir /projects/ees/TDS/DataIngesting/SIMULATED_DAILY_INGEST/ --inputFile noaa_stationdata_meta_2022-01-09T00:00:00.csv
-python createIngestStationMeta.py --inputDir /projects/ees/TDS/DataHarvesting/SIMULATED_DAILY_HARVESTING/ --outputDir /projects/ees/TDS/DataIngesting/SIMULATED_DAILY_INGEST/ --inputFile contrails_stationdata_meta_COASTAL_2022-01-09T00:00:00.csv
-python createIngestStationMeta.py --inputDir /projects/ees/TDS/DataHarvesting/SIMULATED_DAILY_HARVESTING/ --outputDir /projects/ees/TDS/DataIngesting/SIMULATED_DAILY_INGEST/ --inputFile contrails_stationdata_meta_RIVERS_2022-01-09T00:00:00.csv
