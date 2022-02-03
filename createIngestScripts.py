@@ -2,25 +2,11 @@
 # coding: utf-8
 
 # Import Python modules
-import argparse, glob, os
+import argparse, glob, os, pdb
 from loguru import logger
 
 def createStationIngest(inputDir):
     inputFiles = glob.glob(inputDir+"geom_*.csv")
-
-    if os.path.exists(inputDir+"docker_cp_apsviz_gauge_stations.sh"):
-        os.remove(inputDir+"docker_cp_apsviz_gauge_stations.sh")
-    else:
-        print("Can not delete the file as it doesn't exists")
-
-    f = open(inputDir+"docker_cp_apsviz_gauge_stations.sh","a")
-
-    for geomfile in inputFiles:
-       f.write("docker cp "+geomfile.strip()+" apsviz-timeseriesdb-refine_db_1:/home/\n")
- 
-    f.close()
-
-    os.chmod(inputDir+"docker_cp_apsviz_gauge_stations.sh", 0o755)
 
     if os.path.exists(inputDir+"gauge_station_copy.sql"):
         os.remove(inputDir+"gauge_station_copy.sql")
@@ -32,7 +18,7 @@ def createStationIngest(inputDir):
     for geomfile in inputFiles:
         inputFile = geomfile.split('/')[-1]
         f.write("COPY drf_gauge_station(station_name,lat,lon,tz,gauge_owner,location_name,country,state,county,geom)\n")
-        f.write("FROM '/home/"+inputFile+"'\n")
+        f.write("FROM '/home/DataIngesting/SIMULATED_DAILY_INGEST/"+inputFile+"'\n")
         f.write("DELIMITER ','\n")
         f.write("CSV HEADER;\n")
         f.write("\n")
@@ -55,20 +41,6 @@ def createStationIngest(inputDir):
 def createSourceIngest(inputDir):
     inputFiles = glob.glob(inputDir+"source_*.csv")
 
-    if os.path.exists(inputDir+"docker_cp_apsviz_gauge_source.sh"):
-        os.remove(inputDir+"docker_cp_apsviz_gauge_source.sh")
-    else:
-        print("Can not delete the file as it doesn't exists")
-
-    f = open(inputDir+"docker_cp_apsviz_gauge_source.sh","a")
-
-    for sourcefile in inputFiles:
-       f.write("docker cp "+sourcefile.strip()+" apsviz-timeseriesdb-refine_db_1:/home/\n")
- 
-    f.close()
-
-    os.chmod(inputDir+"docker_cp_apsviz_gauge_source.sh", 0o755)
-
     if os.path.exists(inputDir+"gauge_source_copy.sql"):
         os.remove(inputDir+"gauge_source_copy.sql")
     else:
@@ -79,7 +51,7 @@ def createSourceIngest(inputDir):
     for sourcefile in inputFiles:
         inputFile = sourcefile.split('/')[-1]
         f.write("COPY drf_gauge_source(station_id,data_source,units,source_name,source_archive)\n")
-        f.write("FROM '/home/"+inputFile+"'\n")
+        f.write("FROM '/home/DataIngesting/SIMULATED_DAILY_INGEST/"+inputFile+"'\n")
         f.write("DELIMITER ','\n")
         f.write("CSV HEADER;\n")
         f.write("\n")
@@ -100,24 +72,7 @@ def createSourceIngest(inputDir):
     os.chmod(inputDir+"psql_apsviz_gauge_source_copy.sh", 0o755)
  
 def createDataIngest(inputDir, inputDataset):
-    inputFiles = glob.glob(inputDir+inputDataset+"_*.csv")
-
-    dock_cp_file = "docker_cp_apsviz_gauge_"+inputDataset+".sh"
-
-    if os.path.exists(inputDir+dock_cp_file):
-        os.remove(inputDir+dock_cp_file)
-    else:
-        print("Can not delete the file as it doesn't exists")
-
-    f = open(inputDir+dock_cp_file,"w")
-    
-    for datafile in inputFiles:
-        #inputFile = datafile.split('/')[-1]
-        f.write("docker cp "+datafile.strip()+" apsviz-timeseriesdb-refine_db_1:/home/\n")
-
-    f.close()
-
-    os.chmod(inputDir+dock_cp_file, 0o755)
+    inputFiles = glob.glob(inputDir+"data_"+inputDataset+"_*.csv")
 
     gauge_cp_file = "gauge_copy_"+inputDataset+".sql"
 
@@ -131,7 +86,7 @@ def createDataIngest(inputDir, inputDataset):
     for datafile in inputFiles:
         inputFile = datafile.split('/')[-1]
         f.write("COPY drf_gauge_data(source_id,timemark,time,water_level)\n")
-        f.write("FROM '/home/"+inputFile+"'\n")
+        f.write("FROM '/home/DataIngesting/SIMULATED_DAILY_INGEST/"+inputFile+"'\n")
         f.write("DELIMITER ','\n")
         f.write("CSV HEADER;\n")
         f.write("\n")
