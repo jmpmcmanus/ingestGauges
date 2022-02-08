@@ -7,10 +7,10 @@ from loguru import logger
 
 def createStationIngest(inputDir, outputDir):
     inputFiles = glob.glob(inputDir+"geom_*.csv")
-
+ 
     for geomFile in inputFiles:
         outPathFile = outputDir+geomFile.split('/')[-1]
-
+ 
         try:
             # Create connection to database and get cursor
             conn = psycopg2.connect("dbname='apsviz_gauges' user='apsviz_gauges' host='localhost' port='5432' password='apsviz_gauges'")
@@ -22,7 +22,7 @@ def createStationIngest(inputDir, outputDir):
             cur.execute("""BEGIN""")
 
             # Run query
-            cur.execute("""COPY drf_gauge_station(station_name,lat,lon,tz,gauge_owner,location_name,country,state,county,geom)
+            cur.execute("""COPY drf_gauge_station(station_name,lat,lon,tz,gauge_owner,location_name,location_type,country,state,county,geom)
                            FROM %(out_path_file)s
                            DELIMITER ','
                            CSV HEADER""",
@@ -30,7 +30,7 @@ def createStationIngest(inputDir, outputDir):
 
             # Commit ingest
             conn.commit()
-
+ 
             # Close cursor and database connection
             cur.close()
             conn.close()
@@ -134,6 +134,7 @@ def createView():
                               s.source_name AS source_name,
                               s.source_archive AS source_archive,
                               g.location_name AS location_name,
+                              g.location_type AS location_type,
                               g.country AS country,
                               g.state AS state,
                               g.county AS county,

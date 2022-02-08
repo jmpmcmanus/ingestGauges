@@ -2,7 +2,7 @@
 # coding: utf-8
 
 # Import Python modules
-import argparse, glob, sys, os, psycopg2, us
+import argparse, glob, sys, os, psycopg2, us, pdb
 import pandas as pd
 from psycopg2.extensions import AsIs
 from geopy.geocoders import Nominatim
@@ -38,21 +38,86 @@ def getGeometry(lon, lat):
     # If exception print error 
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
+
+def getNOAAStations():
+    try:
+        # Create connection to database and get cursor
+        conn = psycopg2.connect("dbname='apsviz_gauges' user='apsviz_gauges' host='localhost' port='5432' password='apsviz_gauges'")
+        cur = conn.cursor()
+
+        # Set enviromnent
+        cur.execute("""SET CLIENT_ENCODING TO UTF8""")
+        cur.execute("""SET STANDARD_CONFORMING_STRINGS TO ON""")
+        cur.execute("""BEGIN""")
+
+        # Run query
+        cur.execute("""SELECT station_name, lat, lon, name FROM noaa_stations 
+                       ORDER BY station_name""")
+
+        # convert query output to Pandas dataframe
+        df = pd.DataFrame(cur.fetchall(), columns=['station_name', 'lat', 'lon', 'name'])
+
+        # Close cursor and database connection
+        cur.close()
+        conn.close()
+
+        # return first row
+        return(df)
+
+    # If exception print error
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+
+def getNCEMStations(locationType):
+    try:
+        # Create connection to database and get cursor
+        conn = psycopg2.connect("dbname='apsviz_gauges' user='apsviz_gauges' host='localhost' port='5432' password='apsviz_gauges'")
+        cur = conn.cursor()
+
+        # Set enviromnent
+        cur.execute("""SET CLIENT_ENCODING TO UTF8""")
+        cur.execute("""SET STANDARD_CONFORMING_STRINGS TO ON""")
+        cur.execute("""BEGIN""")
+
+        # Run query
+        if locationType == 'coastal':
+            cur.execute("""SELECT site_id, latitude, longitude, owner, name, county FROM dbo_gages_all
+                           WHERE is_coastal = 1 AND owner != 'NOAA' AND latitude IS NOT NULL
+                           ORDER BY site_id""")
+        elif locationType == 'rivers':
+            cur.execute("""SELECT site_id, latitude, longitude, owner, name, county FROM dbo_gages_all
+                           WHERE is_coastal = 0 AND owner != 'NOAA' AND latitude IS NOT NULL
+                           ORDER BY site_id""")
+        else:
+            sys.exit('Incorrect station type')
+
+        # convert query output to Pandas dataframe
+        df = pd.DataFrame(cur.fetchall(), columns=['site_id', 'latitude', 'longitude', 'owner', 'name', 'county'])
+
+        # Close cursor and database connection
+        cur.close()
+        conn.close()
+
+        # return first row
+        return(df)
+
+    # If exception print error
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
             
 
-# This function take a directory path, and filename as input and returns a dataframe. It uses Nominatim
+# This function queriers the original noaa station table extracting station information, and  
+# returns a dataframe. It uses the information from the table along with Nominatim 
 # and ZipCodeDatabase to generate and address from latitude and longitude values. 
-def addNOAAMeta(dirpath, filename):
+def addNOAAMeta(locationType):
     # Create instance of Nominatim, and ZipCodeDatabase
     geolocator = Nominatim(user_agent="geoapiExercises")
     zcdb = ZipCodeDatabase()
 
-    # Read input file and drop unnecessary columns
-    df = pd.read_csv(dirpath+filename)
-    df.drop(columns=['UNITS','STATE', 'COUNTY'], inplace=True)
-   
+    # Get station data from original NOAA station table 
+    df = getNOAAStations()
+ 
     # Define list for input into new columns 
-    owner = []
     country = []
     state = []
     county = []
@@ -60,12 +125,9 @@ def addNOAAMeta(dirpath, filename):
 
     # Loop through dataframe
     for index, row in df.iterrows():
-        # Get owner value
-        owner = row['OWNER']
-       
         # Get longitude and latitude values 
-        lon = row['LON']
-        lat = row['LAT']
+        lon = row['lon']
+        lat = row['lat']
        
         # Get location address using latitude and longitude values
         location = geolocator.reverse(str(lat)+","+str(lon))
@@ -75,7 +137,6 @@ def addNOAAMeta(dirpath, filename):
         country_code = address.get('country_code', '').strip()
         country.append(country_code)
         
-
         # Check if address is in the US
         if country_code == 'us':
             try:
@@ -116,67 +177,46 @@ def addNOAAMeta(dirpath, filename):
         
         geom.append(getGeometry(lon, lat))
     
-    #sourcePrefix = filename.split('_')[0]
-    
-    df = df.rename(columns={'OWNER': 'gauge_owner'})
-
+    df['gauge_owner'] = 'NOAA/NOS'
+    df['location_type'] = locationType 
+    df['tz'] = 'gmt'
     df['country'] = country
     df['state'] = state
     df['county'] = county
     df['geom'] = geom
     df.columns= df.columns.str.lower()
-    df = df.rename(columns={'station': 'station_name'})
+    #df = df.rename(columns={'station': 'station_name'})
     df = df.rename(columns={'name': 'location_name'})
-    newColsOrder = ["station_name","lat","lon","tz","gauge_owner","location_name","country","state","county","geom"]
+    newColsOrder = ["station_name","lat","lon","tz","gauge_owner","location_name","location_type","country","state","county","geom"]
     df=df.reindex(columns=newColsOrder)
     
     return(df)
 
-def addNCEMMeta(dirpath, contrailfile, adcircfile):
+def addNCEMMeta(locationType):
     # NEED TO GET THIS INFORMATION FROM CONTRAILS INSTEAD OF RELYING ON AN EXCEL FILE
-    df = pd.read_excel('/Users/jmpmcman/Work/Surge/apsViz/gauges/FIMAN_NCEM_Coastal.xlsx')
-    fdf = df.loc[df['IS_COASTAL'] == 1]
-    fdf = fdf.loc[fdf['IN_SERVICE'] == 1]
-    fdf.drop(fdf[fdf['OWNER'] == 'NOAA'].index, inplace = True)
+    df = getNCEMStations(locationType.lower())
 
-    cdf = pd.read_csv(dirpath+contrailfile)
-    for index, row in cdf.iterrows():
-        check1 = fdf.loc[fdf['SITE_ID'] == row['STATION']]
-        if len(check1.index) == 0:
-            check2 = df.loc[df['SITE_ID'] == row['STATION']]
-            if len(check2.index) == 1:
-                fdf = fdf.append(check2, ignore_index=True)
-
-    cdf = pd.read_csv(dirpath+adcircfile)
-    for index, row in cdf.iterrows():
-        if len(row['STATION']) < 7:
-            check1 = fdf.loc[fdf['SITE_ID'] == row['STATION']]
-            if len(check1.index) == 0:
-                check2 = df.loc[df['SITE_ID'] == row['STATION']]
-                if len(check2.index) == 1:
-                    fdf = fdf.append(check2, ignore_index=True)
-
-    fdf.drop(columns=['RAIN_ONLY_GAGE','IN_SERVICE','IS_COASTAL'], inplace=True)
-    fdf = fdf.rename(columns={'LATITUDE':'lat','LONGITUDE':'lon','SITE_ID':'station_name',
-                              'NAME':'location_name','OWNER': 'gauge_owner'})
-    fdf.columns= fdf.columns.str.lower()
-    fdf['tz'] = 'gmt'
-    fdf['country'] = 'us'
-    fdf['state'] = 'nc'
-    newColsOrder = ["station_name","lat","lon","tz","gauge_owner","location_name","country","state","county"]
-    fdf=fdf.reindex(columns=newColsOrder)
-    fdf.reset_index(drop=True, inplace=True)
+    df = df.rename(columns={'latitude':'lat','longitude':'lon','site_id':'station_name',
+                            'name':'location_name','owner': 'gauge_owner'})
+    df.columns= df.columns.str.lower()
+    df['tz'] = 'gmt'
+    df['location_type'] = locationType
+    df['country'] = 'us'
+    df['state'] = 'nc'
+    newColsOrder = ["station_name","lat","lon","tz","gauge_owner","location_name","location_type","country","state","county"]
+    df=df.reindex(columns=newColsOrder)
+    df.reset_index(drop=True, inplace=True)
     
     geom = []
     
-    for index, row in fdf.iterrows():
+    for index, row in df.iterrows():
         geom.append(getGeometry(row['lon'], row['lat']))
         
-    fdf['geom'] = geom
+    df['geom'] = geom
     
-    return(fdf)
+    return(df)
 
-# Main program function takes args as input, which contains the inputDir, outputDir, and inputFile values.  
+# Main program function takes args as input, which contains the outputDir, and outputFile values.  
 @logger.catch
 def main(args):
     # Add logger
@@ -185,41 +225,37 @@ def main(args):
     logger.add(log_path+'/createIngestStationMeta.log', level='DEBUG')
 
     # Extract args variables
-    inputDir = args.inputDir
     outputDir = args.outputDir
-    inputFile = args.inputFile
+    outputFile = args.outputFile
 
-    # Get dataset
-    dataset = inputFile.split('_')[0]
+    # Get dataset and location type
+    dataset = outputFile.split('_')[0]
+    locationType = outputFile.split('_')[2]
 
     if dataset == 'noaa':
         # If dataset is noaa run the addNOAAMeta function and write output to csv file 
         logger.info('Start processing NOAA stations.')
-        df = addNOAAMeta(inputDir,inputFile)
-        df.to_csv(outputDir+'geom_'+inputFile, index=False) 
+        df = addNOAAMeta(locationType)
+        df.to_csv(outputDir+'geom_'+outputFile, index=False) 
         logger.info('Finnished processing NOAA stations.')
     elif dataset == 'contrails':
-         # If dataset is contrails run the addNCEMMeta function and write output to csv file
+        # If dataset is contrails run the addNCEMMeta function and write output to csv file
         logger.info('Start processing Contrails stations.')
-        # NEED TO GET THIS INFORMATION FROM CONTRAILS DIRECTLY. SHOULD KNOW WHAT STATIONS ARE GOING TO BE USED 
-        # INDEPENDENTLY OF JEFF 
-        adcircFile = glob.glob(inputDir+'adcirc_stationdata_meta_*_*_'+inputFile.split('_')[-1])[0].split('/')[-1]
-        df = addNCEMMeta(inputDir, inputFile, adcircFile)
-        df.to_csv(outputDir+'geom_'+inputFile, index=False)
+        df = addNCEMMeta(locationType)
+        df.to_csv(outputDir+'geom_'+outputFile, index=False)
         logger.info('Finished processing Contrails stations.')
     else:
         # If dataset is not noaa or contrails exit program with error message.
         logger.add(lambda _: sys.exit(1), level="ERROR")
 
-# Run main function takes inputDir, outputDir, and inputFile as input. 
+# Run main function takes outputDir, and outputFile as input. 
 if __name__ == "__main__":
     """ This is executed when run from the command line """
     parser = argparse.ArgumentParser()
 
     # Optional argument which requires a parameter (eg. -d test)
-    parser.add_argument("--inputDir", action="store", dest="inputDir")
     parser.add_argument("--outputDir", action="store", dest="outputDir")
-    parser.add_argument("--inputFile", action="store", dest="inputFile")
+    parser.add_argument("--outputFile", action="store", dest="outputFile")
 
     args = parser.parse_args()
     main(args)
