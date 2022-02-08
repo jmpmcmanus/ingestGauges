@@ -56,7 +56,7 @@ def createSourceIngest(inputDir, outputDir):
             cur.execute("""BEGIN""")
 
             # Run query
-            cur.execute("""COPY drf_gauge_source(station_id,data_source,units,source_name,source_archive)
+            cur.execute("""COPY drf_gauge_source(station_id,data_source,source_name,source_archive)
                            FROM %(out_path_file)s
                            DELIMITER ','
                            CSV HEADER""",
@@ -127,7 +127,6 @@ def createView():
                               d.timemark AS timemark,
                               d.time AS time,
                               d.water_level AS water_level,
-                              s.units AS units,
                               g.tz AS tz,
                               g.gauge_owner AS gauge_owner,
                               s.data_source AS data_source,

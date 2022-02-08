@@ -105,9 +105,9 @@ def addMeta(inputDir, outputDir, inputFile):
     if source_archive == 'adcirc':
         # Get soure_name and data_source from filename, and use it along with the list of stations to run
         # the getModelSourceID function to get the sourc_id(s)
-        data_source = inputFile.split('_')[3].upper().strip()+'_'+inputFile.split('_')[2].upper().strip()
+        data_source = inputFile.split('_')[2].lower().strip()+'_'+inputFile.split('_')[3].lower().strip()
         dfstations = getModelSourceID(data_source,station_tuples)
-       
+ 
         # Get the timemark for the forecast and nowecast data 
         df['timemark']  = inputFile.split('_')[-1].split('.')[0].lower().strip()
             
