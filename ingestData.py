@@ -3,9 +3,79 @@
 
 # Import Python modules
 import argparse, glob, os, psycopg2
+import pandas as pd
 from loguru import logger
 
-def createStationIngest(inputDir, outputDir):
+def getInputDataFiles(inputDataset):
+    try:
+        # Create connection to database and get cursor
+        conn = psycopg2.connect("dbname='apsviz_gauges' user='apsviz_gauges' host='localhost' port='5432' password='apsviz_gauges'")
+        cur = conn.cursor()
+
+        # Set enviromnent
+        cur.execute("""SET CLIENT_ENCODING TO UTF8""")
+        cur.execute("""SET STANDARD_CONFORMING_STRINGS TO ON""")
+        cur.execute("""BEGIN""")
+
+        # Run query
+        cur.execute("""SELECT file_name
+                       FROM drf_gauge_data_file
+                       WHERE source = %(source)s AND ingested = False
+                       ORDER BY data_date_time""",
+                    {'source': inputDataset})
+
+        # convert query output to Pandas dataframe
+        df = pd.DataFrame(cur.fetchall(), columns=['file_name'])
+ 
+        # Close cursor and database connection
+        cur.close()
+        conn.close()
+
+        # Return Pandas dataframe
+        if inputDataset == 'adcirc':
+            return(df.head(20))
+        else:
+            return(df.head(10))
+
+    # If exception print error
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+
+def ingestFileInfo(inputDir, outputDir):
+    inputFiles = glob.glob(inputDir+"files_*.csv")
+
+    for infoFile in inputFiles:
+        outPathFile = outputDir+infoFile.split('/')[-1]
+
+        try:
+            # Create connection to database and get cursor
+            conn = psycopg2.connect("dbname='apsviz_gauges' user='apsviz_gauges' host='localhost' port='5432' password='apsviz_gauges'")
+            cur = conn.cursor()
+
+            # Set enviromnent
+            cur.execute("""SET CLIENT_ENCODING TO UTF8""")
+            cur.execute("""SET STANDARD_CONFORMING_STRINGS TO ON""")
+            cur.execute("""BEGIN""")
+
+            # Run query
+            cur.execute("""COPY drf_gauge_data_file(dir_path,file_name,data_date_time,data_begin_time,data_end_time,file_date_time,source,content_info,ingested)
+                           FROM %(out_path_file)s
+                           DELIMITER ','
+                           CSV HEADER""",
+                        {'out_path_file': outPathFile})
+
+            # Commit ingest
+            conn.commit()
+
+            # Close cursor and database connection
+            cur.close()
+            conn.close()
+
+        # If exception print error
+        except (Exception, psycopg2.DatabaseError) as error:
+            print(error)
+
+def ingestStation(inputDir, outputDir):
     inputFiles = glob.glob(inputDir+"geom_*.csv")
  
     for geomFile in inputFiles:
@@ -39,7 +109,7 @@ def createStationIngest(inputDir, outputDir):
         except (Exception, psycopg2.DatabaseError) as error:
             print(error)
 
-def createSourceIngest(inputDir, outputDir):
+def ingestSource(inputDir, outputDir):
     inputFiles = glob.glob(inputDir+"source_*.csv")
 
     for sourceFile in inputFiles:
@@ -73,11 +143,12 @@ def createSourceIngest(inputDir, outputDir):
         except (Exception, psycopg2.DatabaseError) as error:
             print(error)
 
-def createDataIngest(inputDir, outputDir, inputDataset):
-    inputFiles = glob.glob(inputDir+"data_"+inputDataset+"_*.csv")
+def ingestData(inputDir, outputDir, inputDataset):
+    dfDirFiles = getInputDataFiles(inputDataset)
 
-    for dataFile in inputFiles:
-        outPathFile = outputDir+dataFile.split('/')[-1]
+    for index, row in dfDirFiles.iterrows():
+        updateFile = row[0]
+        outPathFile = outputDir+'data_'+updateFile
 
         try:
             # Create connection to database and get cursor
@@ -97,6 +168,16 @@ def createDataIngest(inputDir, outputDir, inputDataset):
                         {'out_path_file': outPathFile})
 
             # Commit ingest
+            conn.commit()
+
+            # Run update 
+            cur.execute("""UPDATE drf_gauge_data_file
+                           SET ingested = True
+                           WHERE file_name = %(update_file)s
+                           """,
+                        {'update_file': updateFile})
+
+            # Commit update 
             conn.commit()
 
             # Close cursor and database connection
@@ -167,22 +248,26 @@ def main(args):
     inputTask = args.inputTask
     inputDataset = args.inputDataset
 
-    if inputTask.lower() == 'station':
-        logger.info('Creating station ingest script.')
-        createStationIngest(inputDir, outputDir)
-        logger.info('Created station ingest script.')
+    if inputTask.lower() == 'file':
+        logger.info('Ingesting input file information.')
+        ingestFileInfo(inputDir, outputDir)
+        logger.info('Ingested input file information.')
+    elif inputTask.lower() == 'station':
+        logger.info('Ingesting station data.')
+        ingestStation(inputDir, outputDir)
+        logger.info('Ingested station data.')
     elif inputTask.lower() == 'source':
-        logger.info('Creating source ingest script.')
-        createSourceIngest(inputDir, outputDir)
-        logger.info('Created source ingest script..')
+        logger.info('Ingesting source data.')
+        ingestSource(inputDir, outputDir)
+        logger.info('ingested source data.')
     elif inputTask.lower() == 'data':
-        logger.info('Creating data ingest script for dataset '+inputDataset+'.')
-        createDataIngest(inputDir, outputDir, inputDataset)
-        logger.info('Created data ingest script for dataset '+inputDataset+'.')
+        logger.info('Ingesting data for dataset '+inputDataset+'.')
+        ingestData(inputDir, outputDir, inputDataset)
+        logger.info('Ingested data for dataset '+inputDataset+'.')
     elif inputTask.lower() == 'view':
-        logger.info('Creating script to create database view.')
+        logger.info('Creating view.')
         createView()
-        logger.info('Created script to create database view.')
+        logger.info('Created view.')
 
 # Run main function takes inputDir, inputTask, and inputDataset as input.
 if __name__ == "__main__":

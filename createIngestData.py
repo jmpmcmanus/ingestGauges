@@ -8,6 +8,42 @@ import numpy as np
 from psycopg2.extensions import AsIs
 from loguru import logger
 
+def getInputFiles(inputDataset):
+    #select dir_path, file_name, data_date_time from drf_gauge_data_file where source = 'adcirc' and ingested = False order by data_date_time;
+    try:
+        # Create connection to database and get cursor
+        conn = psycopg2.connect("dbname='apsviz_gauges' user='apsviz_gauges' host='localhost' port='5432' password='apsviz_gauges'")
+        cur = conn.cursor()
+
+        # Set enviromnent
+        cur.execute("""SET CLIENT_ENCODING TO UTF8""")
+        cur.execute("""SET STANDARD_CONFORMING_STRINGS TO ON""")
+        cur.execute("""BEGIN""")
+
+        # Run query
+        cur.execute("""SELECT dir_path, file_name 
+                       FROM drf_gauge_data_file 
+                       WHERE source = %(source)s AND ingested = False
+                       ORDER BY data_date_time""",
+                    {'source': inputDataset})
+
+        # convert query output to Pandas dataframe
+        df = pd.DataFrame(cur.fetchall(), columns=['dir_path','file_name'])
+
+        # Close cursor and database connection
+        cur.close()
+        conn.close()
+
+        # Return Pandas dataframe
+        if inputDataset == 'adcirc':
+            return(df.head(20))
+        else:  
+            return(df.head(10))
+
+    # If exception print error
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+
 # This function takes as input the source_archive (noaa, contrails), and a list of station_id(s), and returnst source_id(s) for 
 # observation data from the gauge_source table in the apsviz_gauges database. This funciton specifically gets source_id(s) for
 # observation data, such as from NOAA and NCEM.
@@ -128,18 +164,16 @@ def addMeta(inputDir, outputDir, inputFile):
 
 # This function takes as input a directory input path, a directory output path and a dataset variable. It 
 # generates and list of input filenames, and uses them to run the addMeta function above.
-def processData(inputDir, outputDir, inputDataset):
-    dirInputFiles = glob.glob(inputDir+inputDataset+"*.csv")
+def processData(outputDir, inputDataset):
+    dfDirFiles = getInputFiles(inputDataset) 
     
-    for dirInputFile in dirInputFiles:
-        inputFile = dirInputFile.split('/')[-1]
-        if inputFile.split('_')[2] != 'meta' and inputFile.split('_')[2] != 'FakeVeerRight':
-            #print(inputFile)
-            addMeta(inputDir, outputDir, inputFile)
-        else:
-            continue
+    for index, row in dfDirFiles.iterrows():
+        inputDir = row[0]
+        inputFile = row[1] 
 
-# Main program function takes args as input, which contains the inputDir, outputDir, and inputDataset values.
+        addMeta(inputDir, outputDir, inputFile)
+
+# Main program function takes args as input, which contains the  outputDir, and inputDataset values.
 @logger.catch
 def main(args):
     # Add logger
@@ -148,21 +182,19 @@ def main(args):
     logger.add(log_path+'/createIngestData.log', level='DEBUG')
 
     # Extract args variables
-    inputDir = args.inputDir
     outputDir = args.outputDir
     inputDataset = args.inputDataset
 
     logger.info('Start processing data for dataset '+inputDataset+'.')
-    processData(inputDir, outputDir, inputDataset)
+    processData(outputDir, inputDataset) 
     logger.info('Finished processing data for dataset '+inputDataset+'.')
 
-# Run main function takes inputDir, outputDir, and inputDataset as input.
+# Run main function takes outputDir, and inputDataset as input.
 if __name__ == "__main__":
     """ This is executed when run from the command line """
     parser = argparse.ArgumentParser()
 
     # Optional argument which requires a parameter (eg. -d test)
-    parser.add_argument("--inputDir", action="store", dest="inputDir")
     parser.add_argument("--outputDir", action="store", dest="outputDir")
     parser.add_argument("--inputDataset", action="store", dest="inputDataset")
 
