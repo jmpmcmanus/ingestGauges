@@ -9,7 +9,6 @@ from psycopg2.extensions import AsIs
 from loguru import logger
 
 def getInputFiles(inputDataset):
-    #select dir_path, file_name, data_date_time from drf_gauge_data_file where source = 'adcirc' and ingested = False order by data_date_time;
     try:
         # Create connection to database and get cursor
         conn = psycopg2.connect("dbname='apsviz_gauges' user='apsviz_gauges' host='localhost' port='5432' password='apsviz_gauges'")
@@ -22,7 +21,7 @@ def getInputFiles(inputDataset):
 
         # Run query
         cur.execute("""SELECT dir_path, file_name 
-                       FROM drf_gauge_data_file 
+                       FROM drf_harvest_data_file_meta 
                        WHERE source = %(source)s AND ingested = False
                        ORDER BY data_date_time""",
                     {'source': inputDataset})
@@ -36,9 +35,9 @@ def getInputFiles(inputDataset):
 
         # Return Pandas dataframe
         if inputDataset == 'adcirc':
-            return(df.head(20))
+            return(df.head(40))
         else:  
-            return(df.head(10))
+            return(df.head(20))
 
     # If exception print error
     except (Exception, psycopg2.DatabaseError) as error:
@@ -160,7 +159,7 @@ def addMeta(inputDir, outputDir, inputFile):
     df.drop(columns=['station_name'], inplace=True)
 
     # Write dataframe to csv file
-    df.to_csv(outputDir+'data_'+inputFile, index=False)
+    df.to_csv(outputDir+'data_copy_'+inputFile, index=False)
 
 # This function takes as input a directory input path, a directory output path and a dataset variable. It 
 # generates and list of input filenames, and uses them to run the addMeta function above.

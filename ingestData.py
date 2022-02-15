@@ -6,7 +6,7 @@ import argparse, glob, os, psycopg2
 import pandas as pd
 from loguru import logger
 
-def getInputDataFiles(inputDataset):
+def getHarvestDataFileMeta(inputDataset):
     try:
         # Create connection to database and get cursor
         conn = psycopg2.connect("dbname='apsviz_gauges' user='apsviz_gauges' host='localhost' port='5432' password='apsviz_gauges'")
@@ -19,7 +19,7 @@ def getInputDataFiles(inputDataset):
 
         # Run query
         cur.execute("""SELECT file_name
-                       FROM drf_gauge_data_file
+                       FROM drf_harvest_data_file_meta
                        WHERE source = %(source)s AND ingested = False
                        ORDER BY data_date_time""",
                     {'source': inputDataset})
@@ -33,16 +33,16 @@ def getInputDataFiles(inputDataset):
 
         # Return Pandas dataframe
         if inputDataset == 'adcirc':
-            return(df.head(20))
+            return(df.head(40))
         else:
-            return(df.head(10))
+            return(df.head(20))
 
     # If exception print error
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
-def ingestFileInfo(inputDir, outputDir):
-    inputFiles = glob.glob(inputDir+"files_*.csv")
+def ingestHarvestDataFileMeta(inputDir, outputDir):
+    inputFiles = glob.glob(inputDir+"harvest_files_*.csv")
 
     for infoFile in inputFiles:
         outPathFile = outputDir+infoFile.split('/')[-1]
@@ -58,7 +58,7 @@ def ingestFileInfo(inputDir, outputDir):
             cur.execute("""BEGIN""")
 
             # Run query
-            cur.execute("""COPY drf_gauge_data_file(dir_path,file_name,data_date_time,data_begin_time,data_end_time,file_date_time,source,content_info,ingested)
+            cur.execute("""COPY drf_harvest_data_file_meta(dir_path,file_name,data_date_time,data_begin_time,data_end_time,file_date_time,source,content_info,ingested,version,overlap_past_file_date_time)
                            FROM %(out_path_file)s
                            DELIMITER ','
                            CSV HEADER""",
@@ -144,11 +144,11 @@ def ingestSource(inputDir, outputDir):
             print(error)
 
 def ingestData(inputDir, outputDir, inputDataset):
-    dfDirFiles = getInputDataFiles(inputDataset)
+    dfDirFiles = getHarvestDataFileMeta(inputDataset)
 
     for index, row in dfDirFiles.iterrows():
         updateFile = row[0]
-        outPathFile = outputDir+'data_'+updateFile
+        outPathFile = outputDir+'data_copy_'+updateFile
 
         try:
             # Create connection to database and get cursor
@@ -171,7 +171,7 @@ def ingestData(inputDir, outputDir, inputDataset):
             conn.commit()
 
             # Run update 
-            cur.execute("""UPDATE drf_gauge_data_file
+            cur.execute("""UPDATE drf_harvest_data_file_meta
                            SET ingested = True
                            WHERE file_name = %(update_file)s
                            """,
@@ -250,7 +250,7 @@ def main(args):
 
     if inputTask.lower() == 'file':
         logger.info('Ingesting input file information.')
-        ingestFileInfo(inputDir, outputDir)
+        ingestHarvestDataFileMeta(inputDir, outputDir)
         logger.info('Ingested input file information.')
     elif inputTask.lower() == 'station':
         logger.info('Ingesting station data.')
