@@ -2,12 +2,11 @@
 # coding: utf-8
 
 # Import python modules
-import argparse, glob, sys, os, datetime, psycopg2, pdb
+import argparse, glob, sys, os, datetime, psycopg2
 import pandas as pd
-from psycopg2.extensions import AsIs
 from loguru import logger
 
-# This function queries the harvest_gauge_data_file table using a file_name, an pulls out the 
+# This function queries the drf_harvest_data_file_meta table using a file_name, an pulls out the 
 # file_name, and file_date_time, if the file_name exists in the table.
 def getFileDateTime(inputFile):
     try:
@@ -34,19 +33,23 @@ def getFileDateTime(inputFile):
         cur.close()
         conn.close()
 
+        # Return DataFrame
         return(df)
 
     # If exception print error
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
-# This function takes a input a directory path and outputFile, and used them to read the input file
-# and add station_id(s) that are extracted from the apsviz_gauges database.
+# This function takes an input directory path and input dataset, and uses them to create a file list
+# that is ingested into the drf_harvest_data_file_meta table, and used to ingest the data files.
 def createFileList(inputDir, inputDataset):
+    # Search for files in the inputDir that have inputDataset name in them, and generate a list of files found
     dirInputFiles = glob.glob(inputDir+inputDataset+"*.csv")
-   
+  
+    # Define dirOutputFiles variable
     dirOutputFiles = []
- 
+
+    # Loop through dirInputFiles list, fine all files that do not have meta in their name, and add them to dirOutputFiles  
     for dirInputFile in dirInputFiles:
         if dirInputFile.find('meta') == -1:
             #print(dirInputFile)
@@ -54,8 +57,10 @@ def createFileList(inputDir, inputDataset):
         else:
             continue
 
+    # Define outputList variable
     outputList = []
 
+    # Loop through dirOutputFiles, generate new variables and add them to outputList
     for dirOutputFile in dirOutputFiles:
         dir_path = dirOutputFile.split(inputDataset)[0]
         file_name = dirOutputFile.split('/')[-1] 
@@ -63,7 +68,7 @@ def createFileList(inputDir, inputDataset):
 
         checkFile = getFileDateTime(file_name)
         checked_file = checkFile.count()
-        #pdb.set_trace()
+
         if checked_file['file_date_time'] > 0:
             version = checkFile['version'][-1]+1
             #print('There is another file') 
@@ -92,11 +97,14 @@ def createFileList(inputDir, inputDataset):
 
         outputList.append([dir_path,file_name,data_date_time,data_begin_time,data_end_time,file_date_time,source,content_info,ingested,version,overlap_past_file_date_time]) 
 
+    # Convert outputList to a DataFrame
     df = pd.DataFrame(outputList, columns=['dir_path', 'file_name', 'data_date_time', 'data_begin_time', 'data_end_time', 'file_date_time', 'source', 'content_info', 'ingested', 'version', 'overlap_past_file_date_time'])
 
+    # Get first time, and last time from the list of files. This will be used in the filename, to enable checking for time overlap in files
     first_time = df['data_date_time'][0]
     last_time = df['data_date_time'].iloc[-1] 
 
+    # Return DataFrame first time, and last time
     return(df, first_time, last_time)
 
 # Main program function takes args as input, which contains the outputDir, and outputFile values.
@@ -113,9 +121,17 @@ def main(args):
     inputDataset = args.inputDataset
 
     logger.info('Start processing source data for dataset '+inputDataset+'.')
+
+    # Get DataFrame file list, and time variables by running the createFileList function
     df, first_time, last_time = createFileList(inputDir, inputDataset)
+
+    # Get current date    
     current_date = datetime.date.today()
+
+    # Create output file name
     outputFile = 'harvest_files_'+inputDataset+'_'+first_time.strip()+'_'+last_time.strip()+'_'+current_date.strftime("%b-%d-%Y")+'.csv'
+
+    # Write DataFrame containing list of files to a csv file
     df.to_csv(outputDir+outputFile, index=False)
     logger.info('Finished processing source data for dataset '+inputDataset+'.')
 
@@ -129,6 +145,9 @@ if __name__ == "__main__":
     parser.add_argument("--outputDir", action="store", dest="outputDir")
     parser.add_argument("--inputDataset", action="store", dest="inputDataset")
 
+    # Parse input arguments
     args = parser.parse_args()
+
+    # Run main
     main(args)
 

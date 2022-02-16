@@ -6,6 +6,9 @@ import argparse, glob, os, psycopg2
 import pandas as pd
 from loguru import logger
 
+# This function takes an dataset name as input and uses it to query the drf_harvest_data_file_meta table,
+# creating a DataFrame that contains a list of data files to ingest. The ingest directory is the directory
+# path in the apsviz-timeseriesdb database container.
 def getHarvestDataFileMeta(inputDataset):
     try:
         # Create connection to database and get cursor
@@ -33,19 +36,25 @@ def getHarvestDataFileMeta(inputDataset):
 
         # Return Pandas dataframe
         if inputDataset == 'adcirc':
+            # Limit to 40 files at a time
             return(df.head(40))
         else:
+            # Limit to 20 files at a time
             return(df.head(20))
 
     # If exception print error
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
-def ingestHarvestDataFileMeta(inputDir, outputDir):
+# This function takes an input directory and ingest directory as input. It uses the input directory to seach for
+# harvest_files that need to be ingested. It uses the ingest directory to define the path of the harvest_file
+# to ingesting. The ingest directory is the directory path in the apsviz-timeseriesdb database container.
+def ingestHarvestDataFileMeta(inputDir, ingestDir):
     inputFiles = glob.glob(inputDir+"harvest_files_*.csv")
 
     for infoFile in inputFiles:
-        outPathFile = outputDir+infoFile.split('/')[-1]
+        # Create list of data info files, to be ingested by searching the input directory for data info files.
+        ingestPathFile = ingestDir+infoFile.split('/')[-1]
 
         try:
             # Create connection to database and get cursor
@@ -59,10 +68,10 @@ def ingestHarvestDataFileMeta(inputDir, outputDir):
 
             # Run query
             cur.execute("""COPY drf_harvest_data_file_meta(dir_path,file_name,data_date_time,data_begin_time,data_end_time,file_date_time,source,content_info,ingested,version,overlap_past_file_date_time)
-                           FROM %(out_path_file)s
+                           FROM %(ingest_path_file)s
                            DELIMITER ','
                            CSV HEADER""",
-                        {'out_path_file': outPathFile})
+                        {'ingest_path_file': ingestPathFile})
 
             # Commit ingest
             conn.commit()
@@ -75,11 +84,17 @@ def ingestHarvestDataFileMeta(inputDir, outputDir):
         except (Exception, psycopg2.DatabaseError) as error:
             print(error)
 
-def ingestStation(inputDir, outputDir):
+# This function takes an input directory and an ingest directory as input. The input directory is used to search for geom 
+# station files that are to be ingested. The ingest directory is used to define the path of the file to be ingested. The 
+# ingest directory is the directory path in the apsviz-timeseriesdb database container.
+def ingestStation(inputDir, ingestDir):
+    # Create list of geom files, to be ingested by searching the input directory for geom files.
     inputFiles = glob.glob(inputDir+"geom_*.csv")
- 
+
+    # Loop thru geom file list, ingesting each one 
     for geomFile in inputFiles:
-        outPathFile = outputDir+geomFile.split('/')[-1]
+        # Define the ingest path and file using the ingest directory and the geom file name
+        ingestPathFile = ingestDir+geomFile.split('/')[-1]
  
         try:
             # Create connection to database and get cursor
@@ -93,10 +108,10 @@ def ingestStation(inputDir, outputDir):
 
             # Run query
             cur.execute("""COPY drf_gauge_station(station_name,lat,lon,tz,gauge_owner,location_name,location_type,country,state,county,geom)
-                           FROM %(out_path_file)s
+                           FROM %(ingest_path_file)s
                            DELIMITER ','
                            CSV HEADER""",
-                        {'out_path_file': outPathFile})
+                        {'ingest_path_file': ingestPathFile})
 
             # Commit ingest
             conn.commit()
@@ -109,11 +124,17 @@ def ingestStation(inputDir, outputDir):
         except (Exception, psycopg2.DatabaseError) as error:
             print(error)
 
-def ingestSource(inputDir, outputDir):
+# This function takes an input directory and ingest directory as input. It uses the input directory to search for source  
+# csv files, that were created by the createIngestSourceMeta.py program. It uses the ingest directory to define the path
+# of the file that is to be ingested. The ingest directory is the directory path in the apsviz-timeseriesdb database container.
+def ingestSource(inputDir, ingestDir):
+    # Create list of source files, to be ingested by searching the input directory for source files.
     inputFiles = glob.glob(inputDir+"source_*.csv")
 
+    # Loop thru source file list, ingesting each one
     for sourceFile in inputFiles:
-        outPathFile = outputDir+sourceFile.split('/')[-1]
+        # Define the ingest path and file using the ingest directory and the source file name
+        ingestPathFile = ingestDir+sourceFile.split('/')[-1]
 
         try:
             # Create connection to database and get cursor
@@ -127,10 +148,10 @@ def ingestSource(inputDir, outputDir):
 
             # Run query
             cur.execute("""COPY drf_gauge_source(station_id,data_source,source_name,source_archive)
-                           FROM %(out_path_file)s
+                           FROM %(ingest_path_file)s
                            DELIMITER ','
                            CSV HEADER""",
-                        {'out_path_file': outPathFile})
+                        {'ingest_path_file': ingestPathFile})
 
             # Commit ingest
             conn.commit()
@@ -143,12 +164,22 @@ def ingestSource(inputDir, outputDir):
         except (Exception, psycopg2.DatabaseError) as error:
             print(error)
 
-def ingestData(inputDir, outputDir, inputDataset):
+# This function takes an ingest directory and input dataset as input, and uses them to run the getHarvestDataFileMeta
+# function and define the ingestPathFile variable. The getHarvestDataFileMeta function produces a DataFrame (dfDirFiles) 
+# that contains a list of data files, that are queried from the drf_harvest_data_file_meta table. These files are then 
+# ingested into the drf_gauge_data table. After the data has been ingested, from a file, the column "ingested", in the 
+# drf_harvest_data_file_meta table, is updated from False to True. The ingest directory is the directory path in the 
+# apsviz-timeseriesdb database container.
+def ingestData(ingestDir, inputDataset):
+    # Get DataFrame the contains list of data files that need to be ingested
     dfDirFiles = getHarvestDataFileMeta(inputDataset)
 
+    # Loop thru DataFrame ingesting each data file 
     for index, row in dfDirFiles.iterrows():
-        updateFile = row[0]
-        outPathFile = outputDir+'data_copy_'+updateFile
+        # Get name of file, that needs to be ingested, from DataFrame, and create data_copy file name and output path
+        # (ingestPathFile) outsaved to the DataIngesting directory area where is the be ingested using the copy command.
+        ingestFile = row[0]
+        ingestPathFile = ingestDir+'data_copy_'+ingestFile
 
         try:
             # Create connection to database and get cursor
@@ -162,10 +193,10 @@ def ingestData(inputDir, outputDir, inputDataset):
 
             # Run query
             cur.execute("""COPY drf_gauge_data(source_id,timemark,time,water_level)
-                           FROM %(out_path_file)s
+                           FROM %(ingest_path_file)s
                            DELIMITER ','
                            CSV HEADER""",
-                        {'out_path_file': outPathFile})
+                        {'ingest_path_file': ingestPathFile})
 
             # Commit ingest
             conn.commit()
@@ -175,7 +206,7 @@ def ingestData(inputDir, outputDir, inputDataset):
                            SET ingested = True
                            WHERE file_name = %(update_file)s
                            """,
-                        {'update_file': updateFile})
+                        {'update_file': ingestFile})
 
             # Commit update 
             conn.commit()
@@ -188,6 +219,7 @@ def ingestData(inputDir, outputDir, inputDataset):
         except (Exception, psycopg2.DatabaseError) as error:
             print(error)
 
+# This function takes not input, and creates the drf_gauge_station_source_data view.
 def createView():
     try:
         # Create connection to database and get cursor
@@ -234,7 +266,7 @@ def createView():
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
-# Main program function takes args as input, which contains the inputDir, inputTask, and inputDataset values.
+# Main program function takes args as input, which contains the inputDir, ingestDir, inputTask, and inputDataset values.
 @logger.catch
 def main(args):
     # Add logger
@@ -244,42 +276,46 @@ def main(args):
 
     # Extract args variables
     inputDir = args.inputDir
-    outputDir = args.outputDir
+    ingestDir = args.ingestDir
     inputTask = args.inputTask
     inputDataset = args.inputDataset
 
+    # Check if inputTask if file, station, source, data or view, and run appropriate function
     if inputTask.lower() == 'file':
         logger.info('Ingesting input file information.')
-        ingestHarvestDataFileMeta(inputDir, outputDir)
+        ingestHarvestDataFileMeta(inputDir, ingestDir)
         logger.info('Ingested input file information.')
     elif inputTask.lower() == 'station':
         logger.info('Ingesting station data.')
-        ingestStation(inputDir, outputDir)
+        ingestStation(inputDir, ingestDir)
         logger.info('Ingested station data.')
     elif inputTask.lower() == 'source':
         logger.info('Ingesting source data.')
-        ingestSource(inputDir, outputDir)
+        ingestSource(inputDir, ingestDir)
         logger.info('ingested source data.')
     elif inputTask.lower() == 'data':
         logger.info('Ingesting data for dataset '+inputDataset+'.')
-        ingestData(inputDir, outputDir, inputDataset)
+        ingestData(ingestDir, inputDataset)
         logger.info('Ingested data for dataset '+inputDataset+'.')
     elif inputTask.lower() == 'view':
         logger.info('Creating view.')
         createView()
         logger.info('Created view.')
 
-# Run main function takes inputDir, inputTask, and inputDataset as input.
+# Run main function takes inputDir, ingestDir, inputTask, and inputDataset as input.
 if __name__ == "__main__":
     """ This is executed when run from the command line """
     parser = argparse.ArgumentParser()
 
     # Optional argument which requires a parameter (eg. -d test)
     parser.add_argument("--inputDir", action="store", dest="inputDir")
-    parser.add_argument("--outputDir", action="store", dest="outputDir")
+    parser.add_argument("--ingestDir", action="store", dest="ingestDir")
     parser.add_argument("--inputTask", action="store", dest="inputTask")
     parser.add_argument("--inputDataset", action="store", dest="inputDataset")
 
+    # Parse arguments
     args = parser.parse_args()
+
+    # Run main
     main(args)
 

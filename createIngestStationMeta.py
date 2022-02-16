@@ -39,6 +39,8 @@ def getGeometry(lon, lat):
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
+# This function takes not input, and returns a DataFrame that contains a list of NOAA stations that it extracted from the noaa_stations
+# table. The data in the noaa_stations table was obtained from NOAA's api.tidesandcurrents.noaa.gov API.
 def getNOAAStations():
     try:
         # Create connection to database and get cursor
@@ -61,13 +63,16 @@ def getNOAAStations():
         cur.close()
         conn.close()
 
-        # return first row
+        # Return DataFrame 
         return(df)
 
     # If exception print error
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
+# This function takes a gauge location type (COASTAL, TIDAL or RIVERS) as input, and returns a DataFrame that contains a list of NCEM stations 
+# that are extracted from the dbo_gages_all table. The dbo_gages_all table contains data from an Excel file (dbo_GAGES_ALL.xlsx) that was 
+# obtained from Tom Langan at NCEM.
 def getNCEMStations(locationType):
     try:
         # Create connection to database and get cursor
@@ -98,7 +103,7 @@ def getNCEMStations(locationType):
         cur.close()
         conn.close()
 
-        # return first row
+        # Return DataFrame 
         return(df)
 
     # If exception print error
@@ -106,9 +111,9 @@ def getNCEMStations(locationType):
         print(error)
             
 
-# This function queriers the original noaa station table extracting station information, and  
-# returns a dataframe. It uses the information from the table along with Nominatim 
-# and ZipCodeDatabase to generate and address from latitude and longitude values. 
+# This function queriers the original NOAA station table (noaa_stations), using the getNOAAStations function, 
+# extracting station information, and returns a dataframe. It uses the information from the table along with  
+# Nominatim and ZipCodeDatabase to generate and address from latitude and longitude values. 
 def addNOAAMeta(locationType):
     # Create instance of Nominatim, and ZipCodeDatabase
     geolocator = Nominatim(user_agent="geoapiExercises")
@@ -137,7 +142,8 @@ def addNOAAMeta(locationType):
         country_code = address.get('country_code', '').strip()
         country.append(country_code)
         
-        # Check if address is in the US
+        # Check if address is in the US, if it is get county and state information. If it is not use blank string for county and state 
+        # information. 
         if country_code == 'us':
             try:
                 # Extract zipcode address using the ZipCodeDatabase instance, by inputing the zipcode from 
@@ -147,16 +153,26 @@ def addNOAAMeta(locationType):
                 state.append(zipcode.state.lower())
                 county.append(address.get('county', '').replace('County', '').strip())
             except:
+                # If there is an exception get state information from the us module
+                # NEED TO TAKE A CLOSER LOOK AT THIS, AND SEE IF I CAN USE AN IF STATEMENT TO FIND THE PROBLEM, INSTEAD OF USING EXCEPTION
                 stateinfo = us.states.lookup(address.get('state', '').strip())
                 try:
+                    # Append state name and county name to the state and county variables 
                     state.append(stateinfo.abbr.lower())
                     county.append(address.get('county', '').replace('County', '').strip())
                 except:
+                    # If there is an exception check county information to see if county is Lajas, and if not check to see if county is Mayagüez,
+                    # and if not define county as blank string 
+                    # NEED TO TAKE A CLOSER LOOK AT THIS, AND SEE IF I CAN USE AN IF STATEMENT TO FIND THE PROBLEM, INSTEAD OF USING EXCEPTION 
                     countyname = address.get('county', '').replace('County', '').strip()
+                    
+                    # If countyname is Lajas define state as pr
                     if countyname == 'Lajas':
                         state.append('pr')
                         county.append(countyname)
                     else:
+                        # Else if county is not Lajas, check to see if city is Mayagüez, and if it is define state as pr, and append city to county.
+                        # If city is not Mayagüez, then append blank string for state.
                         city = address.get('city', '').strip()
                         if city == 'Mayagüez':
                             state.append('pr')
@@ -174,9 +190,11 @@ def addNOAAMeta(locationType):
                 state.append(address.get('state', '').strip())
                 
             county.append(address.get('county', '').replace('County', '').strip())
-        
+       
+        # Append geometry to geom variable 
         geom.append(getGeometry(lon, lat))
-    
+   
+    # Add meta to DataFrame 
     df['gauge_owner'] = 'NOAA/NOS'
     df['location_type'] = locationType 
     df['tz'] = 'gmt'
@@ -185,35 +203,51 @@ def addNOAAMeta(locationType):
     df['county'] = county
     df['geom'] = geom
     df.columns= df.columns.str.lower()
-    #df = df.rename(columns={'station': 'station_name'})
     df = df.rename(columns={'name': 'location_name'})
+
+    # Reorder columns in DataFrame
     newColsOrder = ["station_name","lat","lon","tz","gauge_owner","location_name","location_type","country","state","county","geom"]
     df=df.reindex(columns=newColsOrder)
-    
+   
+    # Return DataFrame 
     return(df)
 
+# This function queriers the original NCEM station table (db_gages_all), using the getNCEMStations function,
+# extracting station information, and returns a dataframe. 
 def addNCEMMeta(locationType):
-    # NEED TO GET THIS INFORMATION FROM CONTRAILS INSTEAD OF RELYING ON AN EXCEL FILE
+    # Run the getNCEMStation, which outputs a DataFrame the contains a list of NCEM stations queried from the 
+    # db_gages_all table, which contains the original NCEM station meta data. 
     df = getNCEMStations(locationType.lower())
 
+    # Rename columns 
     df = df.rename(columns={'latitude':'lat','longitude':'lon','site_id':'station_name',
                             'name':'location_name','owner': 'gauge_owner'})
+    
+    # Convert all column name to lower case
     df.columns= df.columns.str.lower()
+
+    # Add variables to DataFrame
     df['tz'] = 'gmt'
     df['location_type'] = locationType
     df['country'] = 'us'
     df['state'] = 'nc'
+
+    # Reorder column names and reset index values
     newColsOrder = ["station_name","lat","lon","tz","gauge_owner","location_name","location_type","country","state","county"]
     df=df.reindex(columns=newColsOrder)
     df.reset_index(drop=True, inplace=True)
-    
+   
+    # Define geometry variable 
     geom = []
-    
+
+    # Loop from the DataFrame of stations, and use the lon and lat values to get the geomtry values, using the getGeometry function    
     for index, row in df.iterrows():
         geom.append(getGeometry(row['lon'], row['lat']))
-        
+       
+    # Add geometry value to DataFrame 
     df['geom'] = geom
-    
+   
+    # Return DataFrame 
     return(df)
 
 # Main program function takes args as input, which contains the outputDir, and outputFile values.  
@@ -232,6 +266,7 @@ def main(args):
     dataset = outputFile.split('_')[0]
     locationType = outputFile.split('_')[2]
 
+    # Check if dataset is noaa, contrails
     if dataset == 'noaa':
         # If dataset is noaa run the addNOAAMeta function and write output to csv file 
         logger.info('Start processing NOAA stations.')
@@ -257,6 +292,9 @@ if __name__ == "__main__":
     parser.add_argument("--outputDir", action="store", dest="outputDir")
     parser.add_argument("--outputFile", action="store", dest="outputFile")
 
+    # Parse arguments
     args = parser.parse_args()
+
+    # Run main
     main(args)
 

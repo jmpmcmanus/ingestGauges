@@ -8,6 +8,8 @@ import numpy as np
 from psycopg2.extensions import AsIs
 from loguru import logger
 
+# This function takes a dataset name as input, and uses it to query the drf_harvest_data_file_met table, creating a list
+# of filenames. The list is converted to a DataFrame and returned.
 def getInputFiles(inputDataset):
     try:
         # Create connection to database and get cursor
@@ -26,7 +28,7 @@ def getInputFiles(inputDataset):
                        ORDER BY data_date_time""",
                     {'source': inputDataset})
 
-        # convert query output to Pandas dataframe
+        # convert query output to Pandas DataFrame
         df = pd.DataFrame(cur.fetchall(), columns=['dir_path','file_name'])
 
         # Close cursor and database connection
@@ -81,7 +83,7 @@ def getObsSourceID(source_archive,station_tuples):
         print(error)
 
 # This function takes as input the data_source (hsofs...), and a list of station_id(s), and returns source_id(s) for    
-# model data from the gauge_source table in the apsviz_gauges database. This funciton specifically gets source_id(s) for
+# model data from the drf_gauge_source table in the apsviz_gauges database. This funciton specifically gets source_id(s) for
 # model data, such as from ADCIRC. The data_source, such is hsofs, is the grid that is used in the ADCIRC run.
 def getModelSourceID(data_source,station_tuples):
     try:
@@ -117,7 +119,7 @@ def getModelSourceID(data_source,station_tuples):
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
-# This function takes as input a directory input path, directory output path and a filename, and returns a csv file
+# This function takes as input a directory input path, directory output path and a filename, and returns a csv 
 # file that containes gauge data. the function uses the getObsSourceID and getModelSourceID functions above to get
 # a list of existing source ids that it includes in the gauge data to enable joining the gauge data table with 
 # gauge source table. The function adds a timemark, that it gets from the input file name. The timemark values can

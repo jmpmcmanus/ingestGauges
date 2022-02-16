@@ -7,8 +7,8 @@ import pandas as pd
 from psycopg2.extensions import AsIs
 from loguru import logger
 
-# This function takes a list of station names as input, and uses them to query the apsviz_gauges database, and return a list
-# of station id(s).
+# This function takes a gauge location type (COASTAL, TIDAL or RIVERS), and uses it to query the drf_gauge_station table, 
+# and return a list of station id(s), and station names.
 def getStationID(locationType):
     try:
         # Create connection to database and get cursor
@@ -41,16 +41,16 @@ def getStationID(locationType):
         print(error)
 
 # This function takes a input a directory path and outputFile, and used them to read the input file
-# and add station_id(s) that are extracted from the apsviz_gauges database.
+# and add station_id(s) that are extracted from the drf_gauge_station table in theapsviz_gauges database.
 def addMeta(outputDir, outputFile):
-    # Extract list of stations from dataframe for query database using the getStationID function,
+    # Extract list of stations from dataframe for query database using the getStationID function
     locationType = outputFile.split('_')[2]
     df = getStationID(locationType)
 
     # Get source name from outputFilee
     source = outputFile.split('_')[0]
 
-    # Check if source is ADCIRC
+    # Check if source is ADCIRC, contrails or noaa, and make appropriate additions to DataFrame 
     if source == 'adcirc':
         # Get source_name and data_source from outputFile, and add them to the dataframe along
         # with the source_archive value
@@ -95,6 +95,8 @@ def main(args):
     outputFile = args.outputFile
 
     logger.info('Start processing source data for file '+outputFile+'.')
+
+    # Run addMeta function
     addMeta(outputDir, outputFile)
     logger.info('Finished processing source data for file '+outputFile+'.')
 
@@ -107,6 +109,9 @@ if __name__ == "__main__":
     parser.add_argument("--outputDir", action="store", dest="outputDir")
     parser.add_argument("--outputFile", action="store", dest="outputFile")
 
+    # Parse input arguments
     args = parser.parse_args()
+
+    # Run main
     main(args)
 
